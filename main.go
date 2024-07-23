@@ -147,15 +147,20 @@ func main() {
 		return
 	}
 	if *lineNumbers {
-		useLineNumbers(os.Stdout, &w, *startLine, *endLine)
-		return
+		// useLineNumbers(os.Stdout, &w, *startLine, *endLine)
+		out, err := useLineNumbers(&w, *startLine, *endLine)
+		if err != nil {
+			fmt.Println("error using line numbers")
+			return
+		}
+		w.Write(out)
 	}
 
 	if *findString != "" {
 		find(&w, *findString)
 	}
 
-	useDefault(w)
+	usePipe(w)
 
 }
 
@@ -185,30 +190,46 @@ func find(r io.Reader, s string) {
 	}
 }
 
-func useLineNumbers(w io.Writer, r io.Reader, start, end int) {
+func useLineNumbers(r io.Reader, start, end int) ([]byte, error) {
 	lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#677d8a"))
 	scanner := bufio.NewScanner(r)
+	buff := bytes.Buffer{}
 	i := 1
 	for scanner.Scan() {
 		if i >= start && (end == 0 || i <= end) {
 			line := scanner.Text()
 			s := strconv.Itoa(i)
-			fmt.Fprintf(w, "%s %s\n", lineStyle.Render(s), line)
+			// fmt.Fprintf(w, "%s %s\n", lineStyle.Render(s), line)
+			buff.WriteString(fmt.Sprintf("%s %s\n", lineStyle.Render(s), line))
 		}
 		i += 1
 	}
+	return buff.Bytes(), nil
 }
 
-// useDefault prints the contents of a buffer to stdout.
+// usePipe prints the contents of a buffer to stdout.
 // If stdout is a terminal (i.e. not piped) it will print the
 // buffer as is. If stdout is piped, it will remove any ASCII
 // escape codes from the buffer.
-func useDefault(b bytes.Buffer) {
+func usePipe(b bytes.Buffer) {
 	if info, _ := os.Stdout.Stat(); (info.Mode() & os.ModeCharDevice) != 0 {
 		fmt.Println(b.String())
 	} else {
+		b = removeLineNumbers(b)
 		fmt.Println(removeAsciiEscapeCodes(b.String()))
 	}
+}
+
+func removeLineNumbers(b bytes.Buffer) bytes.Buffer {
+	var result bytes.Buffer
+	scanner := bufio.NewScanner(&b)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, " ", 2)
+		result.WriteString(parts[1] + "\n")
+	}
+	return result
+
 }
 
 func removeAsciiEscapeCodes(s string) string {

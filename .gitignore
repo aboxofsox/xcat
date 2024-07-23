@@ -1,2 +1,4 @@
 .vscode
+bin
 xcat_test.go
+scripts
