@@ -50,7 +50,7 @@ xcat -n main.go@212:227
 ```
 
 #### Piping
-You can pipe the output of `xcat`. It doesn't work if you use line numbers, unfortunately, but soon™️. When piping, the output of `xcat` is trimmed of all ASCII escape characters.
+You can pipe the output of `xcat`. When piping, the output of `xcat` is trimmed of all ASCII escape characters.
 ```powershell
 xcat main.go | clip
 ```
