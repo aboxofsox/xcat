@@ -77,7 +77,7 @@ func main() {
 		return
 	}
 
-	filename := args[0]
+	filename := resolve(args[0])
 	if strings.HasSuffix(filename, ".exe") {
 		return
 	}
@@ -218,6 +218,14 @@ func usePipe(b bytes.Buffer) {
 		b = removeLineNumbers(b)
 		fmt.Println(removeAsciiEscapeCodes(b.String()))
 	}
+}
+
+func resolve(filename string) string {
+	home, _ := os.UserHomeDir()
+	if strings.HasPrefix(filename, "~/") {
+		filename = strings.Replace(filename, "~", home, 1)
+	}
+	return filename
 }
 
 func removeLineNumbers(b bytes.Buffer) bytes.Buffer {
