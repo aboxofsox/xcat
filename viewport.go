@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"os/exec"
+	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,14 +110,26 @@ func max(a, b int) int {
 }
 
 func clearScreen() {
-	exec.Command("clear").Run()
+	fmt.Println("\033[H\033[2J")
 }
 
-func Show(title, content string) {
+func Show(title, content string, useLineNumbers bool) {
+	if useLineNumbers {
+		content = applyLineNumbers(content)
+	}
 	p := tea.NewProgram(model{content: content, title: title})
 	if _, err := p.Run(); err != nil {
 		fmt.Println("Error starting program:", err)
 	}
+}
+
+func applyLineNumbers(content string) string {
+	b := strings.Builder{}
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for i := 1; scanner.Scan(); i++ {
+		b.WriteString(fmt.Sprintf("%s %s\n", lineNumberStyle.Render(strconv.Itoa(i)), scanner.Text()))
+	}
+	return b.String()
 }
 
 func Quick(content string) {

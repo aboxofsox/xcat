@@ -8,7 +8,10 @@ import (
 )
 
 type Config struct {
-	SyntaxHighlightingStyle string `json:"syntax_highlighting_style"`
+	SyntaxHighlightingStyle string   `json:"syntax_highlighting_style"`
+	LineNumberColor         string   `json:"line_number_color"`
+	DisallowedFileTypes     []string `json:"disallowed_file_types"`
+	MaxFileSize             int64    `json:"max_file_size"`
 }
 
 func (c *Config) JSON() ([]byte, error) {
@@ -26,12 +29,15 @@ func (c *Config) Write(w io.Writer) (int, error) {
 func init() {
 	home := homeDir()
 
-	if _, err := os.Stat(home + "/.config"); os.IsNotExist(err) {
-		os.Mkdir(home+"/.config", 0755)
+	if _, err := os.Stat(home + "/.config/xcat"); os.IsNotExist(err) {
+		os.Mkdir(home+"/.config/xcat", 0755)
 	}
 
 	c := &Config{
 		SyntaxHighlightingStyle: "monokai",
+		LineNumberColor:         "#677d8a",
+		DisallowedFileTypes:     []string{"exe", "dll", "so", "dylib", "bin", "o", "a", "lib"},
+		MaxFileSize:             0,
 	}
 
 	f, err := os.Create(home + "/.config/xcat/config.json")
