@@ -22,6 +22,9 @@ xcat average execution time: 32.499113ms
 
 ## Config
 When you run the tool for the first time, a `config.json` file is created in `~/.config/xcat`.
+
+You can also create a new config with the below default values with `xcat -i`.
+
 ```json
 {
         "syntax_highlighting_style": "monokai",
