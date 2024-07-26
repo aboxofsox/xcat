@@ -73,6 +73,10 @@ func main() {
 		return
 	}
 
+	if c.LineNumberColor != "" {
+		lineNumberStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(c.LineNumberColor))
+	}
+
 	if c.MaxFileSize != 0 {
 		MaxFileSize = c.MaxFileSize
 	}
