@@ -10,21 +10,27 @@ xcat average execution time: 32.499113ms
 
 ## Usage
 ```
-  -v        view mode
-  -n        line numbers
-  -s        start line
-  -e        end line
-  -f        find string
-  -h        help
+  -b     big file
+  -v     view mode
+  -n     line numbers
+  -s     start line
+  -e     end line
+  -f     find string
+  -h     help
+  -i     initialize config
 ```
 
 ## Config
 When you run the tool for the first time, a `config.json` file is created in `~/.config/xcat`.
 ```json
 {
-        "syntax_highlighting_style": "monokai"
+        "syntax_highlighting_style": "monokai",
+        "line_number_color": "#677d8a",
+        "disallowed_filet_ypes": ["exe", "dll", "so", "dylib", "bin", "o", "a", "lib"],
+        "size": 0
 }
 ```
+`Size` is the max allowed file size. Use `0` if you don't want to set a limit.
 
 ### Examples
 
