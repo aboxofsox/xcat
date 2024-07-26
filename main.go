@@ -8,9 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode/utf8"
 
 	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/formatters"
@@ -18,6 +20,8 @@ import (
 	"github.com/alecthomas/chroma/styles"
 	"github.com/charmbracelet/lipgloss"
 )
+
+var MaxFileSize int64 = 1024 * 1024
 
 var (
 	findLineNumberStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffb638"))
@@ -32,17 +36,19 @@ var (
 	endLine     = flag.Int("e", 0, "end line")
 	findString  = flag.String("f", "", "find string")
 	helpFlag    = flag.Bool("h", false, "help")
-	initFlag    = flag.Bool("init", false, "initialize config")
+	initFlag    = flag.Bool("i", false, "initialize config")
+	bigFile     = flag.Bool("b", false, "big file")
 )
 
 var flagMap = map[string]string{
-	"-init": "initialize config",
-	"-v":    "view mode",
-	"-n":    "line numbers",
-	"-s":    "start line",
-	"-e":    "end line",
-	"-f":    "find string",
-	"-h":    "help",
+	"-b": "big file",
+	"-v": "view mode",
+	"-n": "line numbers",
+	"-s": "start line",
+	"-e": "end line",
+	"-f": "find string",
+	"-h": "help",
+	"-i": "initialize config",
 }
 
 func resolveFileType(t string) string {
@@ -60,10 +66,15 @@ func resolveFileType(t string) string {
 
 func main() {
 	flag.Parse()
+
 	c, err := loadConfig()
 	if err != nil {
 		fmt.Println("error loading config")
 		return
+	}
+
+	if c.MaxFileSize != 0 {
+		MaxFileSize = c.MaxFileSize
 	}
 
 	if *helpFlag {
@@ -77,10 +88,19 @@ func main() {
 		return
 	}
 
-	filename := args[0]
-	if strings.HasSuffix(filename, ".exe") {
+	filename := resolve(args[0])
+
+	ext := filepath.Ext(filename)
+
+	// ignore disallowed file types
+	// by default, binary executables and library files are ignored
+	// add or remove types in the config file
+	if slices.Contains(c.DisallowedFileTypes, ext) {
 		return
 	}
+
+	// @ symbol is used to specify a specific line number range.
+	// example: foo.txt@1:10 will display lines 1-10.
 	if strings.Contains(filename, "@") {
 		parts := strings.Split(filename, "@")
 		filename = parts[0]
@@ -92,6 +112,19 @@ func main() {
 			*startLine, _ = strconv.Atoi(lines[0])
 		}
 	}
+
+	info, err := os.Stat(filename)
+	if err != nil {
+		fmt.Println("error reading file")
+		return
+	}
+
+	// sometimes you might not want to display a large file
+	if info.Size() > MaxFileSize && !*bigFile {
+		fmt.Println("file too large to display, use -big flag to display")
+		return
+	}
+
 	file, err := os.Open(filename)
 	if err != nil {
 		fmt.Println("error opening file")
@@ -142,20 +175,25 @@ func main() {
 	defer w.Reset()
 
 	if *viewMode {
-		Show(filename, w.String())
 		clearScreen()
+		Show(filename, w.String(), *lineNumbers)
 		return
 	}
 	if *lineNumbers {
-		useLineNumbers(os.Stdout, &w, *startLine, *endLine)
-		return
+		// useLineNumbers(os.Stdout, &w, *startLine, *endLine)
+		out, err := useLineNumbers(&w, *startLine, *endLine)
+		if err != nil {
+			fmt.Println("error using line numbers")
+			return
+		}
+		w.Write(out)
 	}
 
 	if *findString != "" {
 		find(&w, *findString)
 	}
 
-	useDefault(w)
+	usePipe(w)
 
 }
 
@@ -172,7 +210,7 @@ func find(r io.Reader, s string) {
 	i := 1
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(removeAsciiEscapeCodes(scanner.Text()), s) {
+		if strings.Contains(escape(scanner.Text()), s) {
 			fmt.Printf(
 				"%s %s\n",
 				findLineNumberStyle.Render(strconv.Itoa(i)),
@@ -185,45 +223,90 @@ func find(r io.Reader, s string) {
 	}
 }
 
-func useLineNumbers(w io.Writer, r io.Reader, start, end int) {
+func useLineNumbers(r io.Reader, start, end int) ([]byte, error) {
 	lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#677d8a"))
 	scanner := bufio.NewScanner(r)
+	buff := bytes.Buffer{}
 	i := 1
 	for scanner.Scan() {
 		if i >= start && (end == 0 || i <= end) {
 			line := scanner.Text()
 			s := strconv.Itoa(i)
-			fmt.Fprintf(w, "%s %s\n", lineStyle.Render(s), line)
+			// fmt.Fprintf(w, "%s %s\n", lineStyle.Render(s), line)
+			buff.WriteString(fmt.Sprintf("%s %s\n", lineStyle.Render(s), line))
 		}
 		i += 1
 	}
+	return buff.Bytes(), nil
 }
 
-// useDefault prints the contents of a buffer to stdout.
+// usePipe prints the contents of a buffer to stdout.
 // If stdout is a terminal (i.e. not piped) it will print the
 // buffer as is. If stdout is piped, it will remove any ASCII
 // escape codes from the buffer.
-func useDefault(b bytes.Buffer) {
+func usePipe(b bytes.Buffer) {
 	if info, _ := os.Stdout.Stat(); (info.Mode() & os.ModeCharDevice) != 0 {
+		// if err := writeString(b.String(), os.Stdout); err != nil {
+		// 	panic(err)
+		// }
 		fmt.Println(b.String())
 	} else {
-		fmt.Println(removeAsciiEscapeCodes(b.String()))
+		b = removeLineNumbers(b)
+		// if err := writeString(escape(b.String()), os.Stdout); err != nil {
+		// 	panic(err)
+		// }
+		fmt.Println(escape(b.String()))
 	}
 }
 
-func removeAsciiEscapeCodes(s string) string {
-	var inEscapeCode bool
-	var result string
-	for _, c := range s {
-		if c == '\x1b' {
-			inEscapeCode = true
-		}
-		if !inEscapeCode {
-			result += string(c)
-		}
-		if c == 'm' {
-			inEscapeCode = false
-		}
+func writeString(s string, w io.Writer) error {
+	_, err := w.Write([]byte(s))
+	return err
+}
+
+func resolve(filename string) string {
+	home, _ := os.UserHomeDir()
+	if strings.HasPrefix(filename, "~/") {
+		filename = strings.Replace(filename, "~", home, 1)
+	}
+	return filename
+}
+
+func removeLineNumbers(b bytes.Buffer) bytes.Buffer {
+	var result bytes.Buffer
+	scanner := bufio.NewScanner(&b)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, " ", 2)
+		result.WriteString(parts[1] + "\n")
 	}
 	return result
+
+}
+
+func escape(s string) string {
+	var inEscapeCode bool
+	var result strings.Builder
+	for i := 0; i < len(s); {
+		r, size := decodeRune(s[i:])
+		if r == '\x1b' {
+			inEscapeCode = true
+			i += size
+			continue
+		}
+		if inEscapeCode {
+			if r == 'm' {
+				inEscapeCode = false
+			}
+			i += size
+			continue
+		}
+		result.WriteRune(r)
+		i += size
+	}
+	return result.String()
+}
+
+func decodeRune(s string) (rune, int) {
+	return utf8.DecodeRuneInString(s)
 }

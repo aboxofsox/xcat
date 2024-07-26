@@ -16,17 +16,18 @@ type keyMap struct {
 	S    key.Binding // start line
 	E    key.Binding // end line
 	F    key.Binding // find string
+	B    key.Binding // big file
 	Quit key.Binding // quit
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.V, k.N, k.S, k.E, k.F}
+	return []key.Binding{k.V, k.N, k.S, k.E, k.F, k.B, k.Quit}
 
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.V, k.N, k.S, k.E, k.F},
+		{k.V, k.N, k.S, k.E, k.F, k.B, k.Quit},
 		{k.Quit},
 	}
 }
@@ -51,6 +52,10 @@ var keys = keyMap{
 	F: key.NewBinding(
 		key.WithKeys("f"),
 		key.WithHelp("f", "find string"),
+	),
+	B: key.NewBinding(
+		key.WithKeys("b"),
+		key.WithHelp("b", "big file"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
